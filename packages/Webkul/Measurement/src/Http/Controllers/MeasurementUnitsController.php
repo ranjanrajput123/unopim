@@ -1,0 +1,299 @@
+<?php
+
+namespace Webkul\Measurement\Http\Controllers;
+
+use Illuminate\Http\JsonResponse;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Core\Repositories\LocaleRepository;
+use Webkul\Measurement\DataGrids\UnitDataGrid;
+use Webkul\Measurement\Repository\MeasurementFamilyRepository;
+use Webkul\Measurement\Repository\AttributeMeasurementRepository;
+
+class MeasurementUnitsController extends Controller
+{
+    public function __construct(
+        protected MeasurementFamilyRepository $measurementFamilyRepository,
+        protected LocaleRepository $localeRepository,
+        protected \Webkul\Measurement\Repository\AttributeMeasurementRepository $attributeMeasurementRepository
+    ) {}
+
+    public function units($id)
+    {
+        if (request()->ajax()) {
+
+            $grid = app(UnitDataGrid::class);
+            $grid->setFamilyId($id);
+
+            return $grid->toJson();
+        }
+
+        $family = $this->measurementFamilyRepository->find($id);
+        $locales = $this->localeRepository->getActiveLocales();
+        
+        $operationOptions = [
+            ['value' => 'mul', 'label' => 'Multiply'],
+            ['value' => 'div', 'label' => 'Divide'],
+            ['value' => 'add', 'label' => 'Add'],
+            ['value' => 'sub', 'label' => 'Subtract'],
+        ];
+
+        $familyUsedInProducts = false;
+        if (isset($family->units)) {
+            foreach ($family->units as $unitData) {
+                if (isset($unitData['code']) && $this->attributeMeasurementRepository->findWhere(['unit_code' => $unitData['code']])->count() > 0) {
+                    $familyUsedInProducts = true;
+                    break;
+                }
+            }
+        }
+
+        return view('measurement::measurement-families.edit', compact('family', 'locales', 'operationOptions', 'familyUsedInProducts'));
+    }
+
+    public function storeUnit($id)
+    {
+        $family = $this->measurementFamilyRepository->find($id);
+
+        if (! $family) {
+            return response()->json([
+                'message' => trans('measurement::app.messages.unit.not_found'),
+            ], 404);
+        }
+
+        request()->validate([
+            'code'        => 'required|string',
+            'labels'      => 'required|array',
+            'labels.*'    => 'nullable|string',
+            'symbol'      => 'nullable|string',
+            'convert_from_standard' => 'nullable|array',
+            'convert_from_standard.*' => 'nullable|string',
+            'convert_value' => 'nullable|array',
+            'convert_value.*' => 'nullable|numeric',
+        ]);
+
+        $units = $family->units ?? [];
+
+        if (collect($units)->contains('code', request('code'))) {
+            return response()->json([
+                'message' => trans('measurement::app.messages.unit.already_exists'),
+            ], 422);
+        }
+
+        $conversionOperators = request('convert_from_standard', []);
+        $conversionValues = request('convert_value', []);
+
+        $conversionRows = [];
+        foreach ((array) $conversionOperators as $index => $operator) {
+            $conversionRows[] = [
+                'operator' => $operator ?: 'mul',
+                'value'    => isset($conversionValues[$index]) ? (string) $conversionValues[$index] : null,
+            ];
+        }
+
+        if (count($conversionRows) === 0) {
+            $conversionRows[] = [
+                'operator' => 'mul',
+                'value'    => null,
+            ];
+        }
+
+        $newUnit = [
+            'code'   => request('code'),
+            'labels' => request('labels'),
+            'symbol' => request('symbol'),
+            'convert_from_standard' => array_slice($conversionRows, 0, 4),
+        ];
+
+        $units[] = $newUnit;
+
+        $this->measurementFamilyRepository->update([
+            'units' => $units,
+        ], $id);
+
+        return response()->json([
+            'data' => [
+                'redirect_url' => route(
+                    'admin.measurement.families.units.edit',
+                    ['familyId' => $id, 'code' => $newUnit['code']]
+                ),
+            ],
+        ]);
+    }
+
+    public function editUnit(int $familyId, string $code): JsonResponse
+    {
+        $family = $this->measurementFamilyRepository->findOrFail($familyId);
+
+        $unit = collect($family->units)->firstWhere('code', $code);
+
+        if (! $unit) {
+            abort(
+                404,
+                trans('measurement::app.messages.unit.not_foundd')
+            );
+
+        }
+
+       $isStandard = $family->standard_unit === $code;
+
+        $isUsedInProducts = $this->attributeMeasurementRepository->findWhere(['unit_code' => $code])->count() > 0;
+
+        return new JsonResponse([
+            'data' => [
+                ...$unit,
+                'is_used_in_products' => $isUsedInProducts,
+                
+                'is_standard' => $isStandard,
+                'status'     => isset($unit['status']) ? (bool) $unit['status'] : true,
+                'labels'     => $unit['labels'] ?? [],
+                'precision'  => $unit['precision'] ?? null,
+                'symbol'     => $unit['symbol'] ?? null,
+                'convert_from_standard' => is_array($unit['convert_from_standard'] ?? null)
+                    ? $unit['convert_from_standard']
+                    : [
+                        [
+                            'operator' => $unit['convert_from_standard'] ?? 'mul',
+                            'value'    => $unit['convert_value'] ?? null,
+                        ],
+                    ],
+                'convert_value' => $unit['convert_value'] ?? null,
+                'family_id'  => $familyId,
+            ],
+        ]);
+    }
+
+    public function updateUnit($familyId, $code)
+    {
+        $family = $this->measurementFamilyRepository->find($familyId);
+
+        if (! $family) {
+            abort(
+                404,
+                trans('measurement::app.messages.family.not_found')
+            );
+
+        }
+
+        request()->validate([
+            'symbol'      => 'required|string',
+            'labels'      => 'nullable|array',
+            'labels.*'    => 'nullable|string',
+            'convert_from_standard' => 'nullable|array',
+            'convert_from_standard.*' => 'nullable|string',
+            'convert_value' => 'nullable|array',
+            'convert_value.*' => 'nullable|numeric',
+        ]);
+
+        $units = $family->units ?? [];
+
+        $newLabels = request('labels', []);
+        foreach ($units as &$unit) {
+
+            if ($unit['code'] === $code) {
+
+                $unit['labels'] = array_merge(
+                    $unit['labels'] ?? [],
+                    $newLabels
+                );
+
+                $conversionOperators = request('convert_from_standard', []);
+                $conversionValues = request('convert_value', []);
+
+                $conversionRows = [];
+                foreach ((array) $conversionOperators as $index => $operator) {
+                    $conversionRows[] = [
+                        'operator' => $operator ?: 'mul',
+                        'value'    => isset($conversionValues[$index]) ? (string) $conversionValues[$index] : null,
+                    ];
+                }
+
+                if (count($conversionRows) === 0) {
+                    $conversionRows[] = [
+                        'operator' => 'mul',
+                        'value'    => null,
+                    ];
+                }
+
+                $unit['symbol'] = request('symbol');
+                $unit['convert_from_standard'] = array_slice($conversionRows, 0, 4);
+
+                break;
+            }
+        }
+
+        $this->measurementFamilyRepository->update([
+            'units' => $units,
+        ], $familyId);
+
+        if (request()->ajax()) {
+            return response()->json([
+                'data' => [
+                    'redirect_url' => route(
+                        'admin.measurement.families.units.edit',
+                        ['familyId' => $familyId, 'code' => $code]
+                    ),
+                ],
+            ]);
+        }
+
+        return redirect()->back();
+    }
+
+    public function deleteUnit($familyId, $code)
+    {
+        $family = $this->measurementFamilyRepository->findOrFail($familyId);
+
+        $attributeMeasurementRepository = app(AttributeMeasurementRepository::class);
+
+        $exists = $attributeMeasurementRepository
+            ->findWhere(['unit_code' => $code])
+            ->count();
+
+        if ($exists > 0) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'This unit is used in attributes, so it cannot be deleted.',
+            ], 400);
+        }
+
+        $units = $family->units ?? [];
+
+        $updatedUnits = array_filter($units, function ($unit) use ($code) {
+            return isset($unit['code']) && $unit['code'] !== $code;
+        });
+
+        $this->measurementFamilyRepository->update([
+            'units' => array_values($updatedUnits),
+        ], $familyId);
+
+        return response()->json([
+            'status'  => true,
+            'message' => trans('measurement::app.messages.unit.deleted'),
+        ]);
+    }
+
+    public function unitmassDelete()
+    {
+        $ids = request()->input('indices');
+
+        if (! $ids || count($ids) == 0) {
+            session()->flash(
+                'error',
+                trans('measurement::app.messages.unit.no_items_selected')
+            );
+
+            return redirect()->back();
+        }
+
+        foreach ($ids as $id) {
+            $this->measurementFamilyRepository->delete($id);
+        }
+
+        session()->flash(
+            'success',
+            trans('measurement::app.messages.unit.mass_deleted')
+        );
+
+        return redirect()->back();
+    }
+}

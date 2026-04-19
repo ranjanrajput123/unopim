@@ -26,4 +26,20 @@ class AttributeMeasurementRepository extends Repository
     {
         return $this->findOneWhere(['attribute_id' => $attributeId]);
     }
+
+    public function saveAttributeMeasurementByCode($attributeCode, $data)
+    {
+        $attribute = app(\Webkul\Attribute\Repositories\AttributeRepository::class)
+            ->findOneByField('code', $attributeCode);
+
+        if ($attribute) {
+            $this->updateOrCreate(
+                ['attribute_id' => $attribute->id],
+                [
+                    'family_code' => $data['value'] ?? null,
+                    'unit_code'   => $data['unit'] ?? null,
+                ]
+            );
+        }
+    }
 }

@@ -277,7 +277,6 @@
                 <!-- NO BREAK -->
                 @php
                     $selectedValue = [];
-
                     foreach ($field->options->whereIn('code', $value) as $option) {
                         $translatedOptionLabel = $option->translate($currentLocaleCode)?->label;
 

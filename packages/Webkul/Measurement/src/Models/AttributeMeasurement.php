@@ -30,7 +30,7 @@ class AttributeMeasurement extends Model
 
     public function getUnitAttribute()
     {
-        if (!$this->family) {
+        if (! $this->family) {
             return null;
         }
 

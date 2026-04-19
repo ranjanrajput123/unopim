@@ -1,11 +1,17 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Webkul\Measurement\Http\Controllers\Api\MeasurementController;
 
 Route::group([
-    'prefix'     => 'api/admin/measurement',
-    'middleware' => ['api', 'admin'],
+    'prefix'     => 'rest',
+    'middleware' => [
+        'auth:api',
+        'api.scope',
+        'accept.json',
+        'request.locale',
+    ],
 ], function () {
-    Route::get('/families', [MeasurementController::class, 'index']);
+
+    require 'measurement-routes.php';
+
 });

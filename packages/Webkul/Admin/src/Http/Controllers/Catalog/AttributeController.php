@@ -106,9 +106,8 @@ class AttributeController extends Controller
         $attribute = $this->attributeRepository->findOrFail($id);
 
         $locales = $this->localeRepository->getActiveLocales();
-        
-        return view('admin::catalog.attributes.edit', compact('attribute', 'locales'));
 
+        return view('admin::catalog.attributes.edit', compact('attribute', 'locales'));
     }
 
     /**
@@ -132,12 +131,6 @@ class AttributeController extends Controller
         Event::dispatch('catalog.attribute.update.before', $id);
 
         $attribute = $this->attributeRepository->update($requestData, $id);
-        
-        app(\Webkul\Measurement\Repository\AttributeMeasurementRepository::class)
-        ->saveAttributeMeasurement($id, [
-            'family_code' => request('measurement_family'),
-            'unit_code'   => request('measurement_unit'),
-        ]);
 
         Event::dispatch('catalog.attribute.update.after', $attribute);
 

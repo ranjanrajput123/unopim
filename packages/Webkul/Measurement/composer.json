@@ -1,14 +1,5 @@
 {
     "name": "webkul/measurement",
-    "description": "Measurement package for Unopim",
-    "type": "library",
-    "license": "OSL-3.0",
-    "authors": [
-        {
-            "name": "Your Name",
-            "email": "youremail@example.com"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Webkul\\Measurement\\": "src/"
@@ -20,10 +11,5 @@
                 "Webkul\\Measurement\\Providers\\MeasurementServiceProvider"
             ]
         }
-    },
-    "require": {
-        "php": "^8.0",
-        "illuminate/support": "^10.0",
-        "webkul/core": "*"
     }
 }

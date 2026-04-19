@@ -73,35 +73,25 @@ class UnitDataGrid extends DataGrid
     {
         $this->addColumn([
             'index'      => 'code',
-            'label'      => 'Code',
+            'label'      => trans('measurement::app.datagrid.code'),
             'type'       => 'string',
             'searchable' => true,
             'sortable'   => true,
-            'filterable' => true,
+            'filterable' => false,
         ]);
 
         $this->addColumn([
             'index'      => 'label',
-            'label'      => 'Label',
+            'label'      => trans('measurement::app.datagrid.labels'),
             'type'       => 'string',
             'searchable' => true,
             'sortable'   => true,
-            'filterable' => true,
+            'filterable' => false,
         ]);
 
-        // $this->addColumn([
-        //     'index'      => 'symbol',
-        //     'label'      => 'Symbol',
-        //     'type'       => 'string',
-        //     'searchable' => true,
-        //     'sortable'   => true,
-        //     'filterable' => true,
-        // ]);
-
-        // ⭐ Standard Unit column (Akeneo style)
         $this->addColumn([
             'index'      => 'is_standard',
-            'label'      => 'Mark Standard Units',
+            'label'      => trans('measurement::app.datagrid.is_standard'),
             'type'       => 'boolean',
             'searchable' => false,
             'sortable'   => true,
@@ -132,29 +122,31 @@ class UnitDataGrid extends DataGrid
 
     public function prepareActions()
     {
-        // EDIT
-        
-            $this->addAction([
-                'index'  => 'edit',
-                'icon'   => 'icon-edit',
-                'title'  => 'Edit',
-                'method' => 'GET',
-                'url'    => function ($row) {
-                    return route('admin.measurement.families.units.edit', [
-                        'familyId' => $this->familyId,
-                        'code'     => $row->code,
-                    ]);
-                },
-            ]);
-        
+        $this->addAction([
+            'index'  => 'edit',
+            'icon'   => 'icon-edit',
+            'title'  => 'Edit',
+            'method' => 'GET',
+            'url'    => function ($row) {
 
-        // DELETE
+                return route('admin.measurement.families.units.edit', [
+                    'familyId' => $this->familyId,
+                    'code'     => $row->code,
+                ]);
+            },
+        ]);
+
         $this->addAction([
             'index'  => 'delete',
             'icon'   => 'icon-delete',
             'title'  => 'Delete',
             'method' => 'DELETE',
             'url'    => function ($row) {
+
+                if ($row->is_standard) {
+                    return null;
+                }
+
                 return route('admin.measurement.families.units.delete', [
                     'familyId' => $this->familyId,
                     'code'     => $row->code,
@@ -163,12 +155,5 @@ class UnitDataGrid extends DataGrid
         ]);
     }
 
-    public function prepareMassActions()
-    {
-        $this->addMassAction([
-            'title'  => 'Delete Selected',
-            'method' => 'POST',
-            'url'    => route('admin.measurement.families.unitmass_delete'),
-        ]);
-    }
+    
 }

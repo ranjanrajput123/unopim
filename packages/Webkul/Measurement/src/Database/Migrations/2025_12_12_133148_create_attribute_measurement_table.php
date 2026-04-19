@@ -20,6 +20,7 @@ return new class extends Migration
                 ->on('attributes')
                 ->onDelete('cascade');
         });
+
     }
 
     public function down(): void

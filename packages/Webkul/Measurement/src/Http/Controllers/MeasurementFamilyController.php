@@ -3,18 +3,18 @@
 namespace Webkul\Measurement\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Core\Repositories\LocaleRepository;
 use Webkul\Measurement\DataGrids\MeasurementFamilyDataGrid;
-use Webkul\Measurement\DataGrids\UnitDataGrid;
 use Webkul\Measurement\Repository\MeasurementFamilyRepository;
+use Webkul\Measurement\Repository\AttributeMeasurementRepository;
 
 class MeasurementFamilyController extends Controller
 {
     public function __construct(
         protected MeasurementFamilyRepository $measurementFamilyRepository,
-        protected LocaleRepository $localeRepository
+        protected LocaleRepository $localeRepository,
+        protected AttributeMeasurementRepository $attributeMeasurementRepository
     ) {}
 
     public function index()
@@ -24,48 +24,68 @@ class MeasurementFamilyController extends Controller
         }
         $locales = $this->localeRepository->getActiveLocales();
 
-        return view('measurement::admin.families.index', compact('locales'));
+        return view('measurement::measurement-families.index', compact('locales'));
 
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'code'               => 'required|string|max:191',
+            'code'               => 'required|string|max:191|unique:measurement_families,code',
             'standard_unit_code' => 'required|string|max:191',
             'symbol'             => 'nullable|string|max:50',
-            'labels'             => 'required|array',
         ]);
 
-        $labels = $request->input('labels', []);
+        try {
+            $familyLabels = $request->input('labels', []);
+            $unitLabels   = $request->input('unit_labels', []);
 
-        $units = [
-            [
-                'code'   => $request->standard_unit_code,
-                'labels' => $labels,
-                'symbol' => $request->symbol,
-            ],
-        ];
+            $units = [
+                [
+                    'code'   => $request->standard_unit_code,
+                    'labels' => $unitLabels,
+                    'symbol' => $request->symbol,
+                    'convert_from_standard' => [
+                        [
+                            'value'    => "1",
+                            'operator' => "mul",
+                        ],
+                    ],
+                ],
+            ];
 
-        $data = [
-            'code'          => $request->code,
-            'name'          => reset($labels),
-            'labels'        => $labels,
-            'standard_unit' => $request->standard_unit_code,
-            'units'         => $units,
-            'symbol'        => $request->symbol,
-        ];
+            $data = [
+                'code'          => $request->code,
+                'name'          => $request->code,
+                'labels'        => $familyLabels,
+                'standard_unit' => $request->standard_unit_code,
+                'units'         => $units,
+                'symbol'        => $request->symbol,
+            ];
 
-        $family = $this->measurementFamilyRepository->create($data);
+            $family = $this->measurementFamilyRepository->create($data);
 
-        return response()->json([
-            'data' => [
-                'redirect_url' => route(
-                    'admin.measurement.families.edit',
-                    $family->id
-                ),
-            ],
-        ]);
+            session()->flash(
+                'success',
+                trans('measurement::app.messages.family.created')
+            );
+
+            return response()->json([
+                'data' => [
+                    'redirect_url' => route(
+                        'admin.measurement.families.edit',
+                        $family->id
+                    ),
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'error' => 'Something went wrong. Please try again.',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function edit($id)
@@ -73,8 +93,25 @@ class MeasurementFamilyController extends Controller
         $family = $this->measurementFamilyRepository->find($id);
         $labels = $family->labels ?? [];
         $locales = $this->localeRepository->getActiveLocales();
+        
+        $operationOptions = [
+            ['value' => 'mul', 'label' => 'Multiply'],
+            ['value' => 'div', 'label' => 'Divide'],
+            ['value' => 'add', 'label' => 'Add'],
+            ['value' => 'sub', 'label' => 'Subtract'],
+        ];
 
-        return view('measurement::admin.families.edit', compact('family', 'labels', 'locales'));
+        $familyUsedInProducts = false;
+        if (isset($family->units)) {
+            foreach ($family->units as $unitData) {
+                if (isset($unitData['code']) && $this->attributeMeasurementRepository->findWhere(['unit_code' => $unitData['code']])->count() > 0) {
+                    $familyUsedInProducts = true;
+                    break;
+                }
+            }
+        }
+
+        return view('measurement::measurement-families.edit', compact('family', 'labels', 'locales', 'operationOptions', 'familyUsedInProducts'));
     }
 
     public function update(Request $request, $id)
@@ -86,7 +123,6 @@ class MeasurementFamilyController extends Controller
             'labels.*' => 'nullable|string',
         ]);
 
-        // old + new labels merge
         $oldLabels = $family->labels ?? [];
         $newLabels = $request->input('labels', []);
         $mergedLabels = array_merge($oldLabels, $newLabels);
@@ -97,17 +133,37 @@ class MeasurementFamilyController extends Controller
 
         $this->measurementFamilyRepository->update($data, $id);
 
-        session()->flash('success', 'Measurement Family updated successfully.');
+        session()->flash(
+            'success',
+            trans('measurement::app.messages.family.updated')
+        );
 
         return redirect()->back();
     }
 
     public function destroy($id)
     {
+        $family = $this->measurementFamilyRepository->findOrFail($id);
+
+        $attributeMeasurementRepository = app(AttributeMeasurementRepository::class);
+
+        $exists = $attributeMeasurementRepository
+            ->findWhere(['family_code' => $family->code])
+            ->count();
+
+        if ($exists > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This measurement family is used in attributes, so it cannot be deleted.',
+            ], 400);
+        }
+
         $this->measurementFamilyRepository->delete($id);
 
-        return response()->json(['success' => true,
-            'message'                      => 'Measurement family deleted successfully.', ]);
+        return response()->json([
+            'success' => true,
+            'message' => trans('measurement::app.messages.family.deleted'),
+        ]);
     }
 
     public function massDelete()
@@ -120,207 +176,38 @@ class MeasurementFamilyController extends Controller
             return redirect()->back();
         }
 
+        $attributeMeasurementRepository = app(AttributeMeasurementRepository::class);
+
         foreach ($ids as $id) {
-            $this->measurementFamilyRepository->delete($id);
-        }
 
-        session()->flash('success', 'Selected measurement families deleted successfully.');
+            $family = $this->measurementFamilyRepository->find($id);
 
-        return redirect()->back();
-    }
-
-    // units modules all functions
-
-    public function units($id)
-    {
-        if (request()->ajax()) {
-
-            $grid = app(UnitDataGrid::class);
-            $grid->setFamilyId($id);
-
-            return $grid->toJson();
-        }
-
-        $family = $this->measurementFamilyRepository->find($id);
-
-        return view('measurement::admin.units.index', compact('family'));
-    }
-
-    public function storeUnit($id)
-    {
-        
-        $family = $this->measurementFamilyRepository->find($id);
-        if (! $family) {
-            return response()->json([
-                'message' => 'Measurement Family not found',
-            ], 404);
-        }
-
-        request()->validate([
-            'code'        => 'required|string',
-            'labels'      => 'required|array',
-            'labels.*'    => 'nullable|string',
-            'symbol'      => 'nullable|string',
-        ]);
-        $units = $family->units ?? [];
-
-        // Prevent duplicate unit code
-        if (collect($units)->contains('code', request('code'))) {
-            return response()->json([
-                'message' => 'Unit code already exists',
-            ], 422);
-        }
-
-        $newUnit = [
-            'code'   => request('code'),
-            'labels' => request('labels'), // 🔥 dynamic labels
-            'symbol' => request('symbol'),
-        ];
-
-        $units[] = $newUnit;
-
-        $this->measurementFamilyRepository->update([
-            'units' => $units,
-        ], $id);
-
-        return response()->json([
-            'data' => [
-                'redirect_url' => route(
-                    'admin.measurement.families.units.edit',
-                    [
-                        'familyId' => $family->id,
-                        'code'     => request('code'),
-                    ]
-                ),
-            ],
-        ]);
-    }
-
-    // public function editUnit($familyId, $code)
-    // {
-    //     $family = $this->measurementFamilyRepository->find($familyId);
-
-    //     $units = $family->units;
-
-    //     // Find unit by code
-    //     $unit = collect($units)->firstWhere('code', $code);
-
-    //     if (! $unit) {
-    //         abort(404, 'Unit not found');
-    //     }
-
-    //     $labels = $unit['labels'] ?? [];
-    //     $locales = $this->localeRepository->getActiveLocales();
-
-    //     return view('measurement::admin.units.edit', compact('family', 'unit', 'locales', 'labels'));
-    // }
-
-    public function editUnit(int $familyId, string $code): JsonResponse
-    {
-        $family = $this->measurementFamilyRepository->findOrFail($familyId);
-
-        $unit = collect($family->units)->firstWhere('code', $code);
-
-        if (! $unit) {
-            abort(404, 'Unit not found');
-        }
-
-
-        return new JsonResponse([
-            'data' => [
-                ...$unit,
-
-                // safety casts / defaults
-                'status'     => isset($unit['status']) ? (bool) $unit['status'] : true,
-                'labels'     => $unit['labels'] ?? [],
-                'precision'  => $unit['precision'] ?? null,
-                'symbol'     => $unit['symbol'] ?? null,
-                'family_id'  => $familyId,
-            ],
-        ]);
-    }
-
-    public function updateUnit($familyId, $code)
-    {
-        $family = $this->measurementFamilyRepository->find($familyId);
-
-        if (! $family) {
-            abort(404, 'Measurement Family not found');
-        }
-
-        request()->validate([
-            'symbol'      => 'required|string',
-            'labels'      => 'nullable|array',
-            'labels.*'    => 'nullable|string',
-        ]);
-
-        $units = $family->units ?? [];
-
-        $newLabels = request('labels', []);
-
-        
-
-        foreach ($units as &$unit) {
-
-            if ($unit['code'] === $code) {
-
-                // Merge old labels with new ones
-                $unit['labels'] = array_merge(
-                    $unit['labels'] ?? [],
-                    $newLabels
-                );
-
-                $unit['symbol'] = request('symbol');
-
-                break;
+            if (! $family) {
+                continue;
             }
-        }
 
-        $this->measurementFamilyRepository->update([
-            'units' => $units,
-        ], $familyId);
+            $exists = $attributeMeasurementRepository
+                ->findWhere(['family_code' => $family->code])
+                ->count();
 
-        return redirect()
-            ->route('admin.measurement.families.edit', $familyId)
-            ->with('success', 'Unit updated successfully');
-    }
+            if ($exists > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This measurement family is used in attributes, so it cannot be deleted.',
+                ], 400);
 
-    public function deleteUnit($familyId, $code)
-    {
-        $family = $this->measurementFamilyRepository->findOrFail($familyId);
+                continue;
+            }
 
-        $units = $family->units ?? [];
-
-        $updatedUnits = array_filter($units, function ($unit) use ($code) {
-            return isset($unit['code']) && $unit['code'] !== $code;
-        });
-
-        $this->measurementFamilyRepository->update([
-            'units' => array_values($updatedUnits),
-        ], $familyId);
-
-        return response()->json([
-            'status'  => true,
-            'message' => 'Unit deleted successfully.',
-        ]);
-    }
-
-    public function unitmassDelete()
-    {
-        $ids = request()->input('indices');
-
-        if (! $ids || count($ids) == 0) {
-            session()->flash('error', 'No items selected.');
-
-            return redirect()->back();
-        }
-
-        foreach ($ids as $id) {
             $this->measurementFamilyRepository->delete($id);
         }
 
-        session()->flash('success', 'Selected measurement families deleted successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => trans('measurement::app.messages.family.deleted'),
+        ]);
 
         return redirect()->back();
     }
+
 }

@@ -3,7 +3,7 @@
 namespace Webkul\Measurement\DataGrids;
 
 use Illuminate\Support\Facades\DB;
-use Webkul\DataGrid\DataGrid; 
+use Webkul\DataGrid\DataGrid;
 
 class MeasurementFamilyDataGrid extends DataGrid
 {
@@ -14,16 +14,18 @@ class MeasurementFamilyDataGrid extends DataGrid
         $queryBuilder = DB::table('measurement_families')
             ->addSelect(
                 'measurement_families.id',
-                'measurement_families.name',
+                'measurement_families.labels',
+                'measurement_families.code',
                 'measurement_families.standard_unit',
+                'measurement_families.units',
                 'measurement_families.created_at',
                 'measurement_families.updated_at',
                 DB::raw('JSON_LENGTH(units) as unit_count')
             );
 
-        // add filters mapping: key => column
         $this->addFilter('id', 'measurement_families.id');
-        $this->addFilter('name', 'measurement_families.name');
+        $this->addFilter('labels', 'measurement_families.labels');
+        $this->addFilter('code', 'measurement_families.code');
         $this->addFilter('standard_unit', 'measurement_families.standard_unit');
 
         $this->setQueryBuilder($queryBuilder);
@@ -33,10 +35,23 @@ class MeasurementFamilyDataGrid extends DataGrid
 
     public function prepareColumns()
     {
+        $this->addColumn([
+            'index'      => 'labels',
+            'label'      => trans('measurement::app.datagrid.labels'),
+            'type'       => 'string',
+            'searchable' => true,
+            'sortable'   => true,
+            'filterable' => true,
+            'closure'    => function ($row) {
+                $labels = json_decode($row->labels ?? '{}', true);
+
+                return $labels['en_US'] ?? '-';
+            },
+        ]);
 
         $this->addColumn([
-            'index'      => 'name',
-            'label'      => 'Label',
+            'index'      => 'code',
+            'label'      => trans('measurement::app.datagrid.code'),
             'type'       => 'string',
             'searchable' => true,
             'sortable'   => true,
@@ -45,22 +60,40 @@ class MeasurementFamilyDataGrid extends DataGrid
 
         $this->addColumn([
             'index'      => 'standard_unit',
-            'label'      => 'Standard Unit',
+            'label'      => trans('measurement::app.datagrid.standard_unit'),
             'type'       => 'string',
-            'searchable' => true,
+            'searchable' => false,
             'sortable'   => false,
             'filterable' => true,
+            'closure'    => function ($row) {
+
+                $units = json_decode($row->units ?? '[]', true);
+                $standardUnitCode = $row->standard_unit;
+                $locale = app()->getLocale(); 
+
+                if (! empty($units)) {
+                    foreach ($units as $unit) {
+                        if (($unit['code'] ?? null) === $standardUnitCode) {
+
+                            return $unit['labels'][$locale] 
+                                ?? $unit['labels']['en_US'] 
+                                ?? $standardUnitCode;
+                        }
+                    }
+                }
+
+                return $standardUnitCode ?? '-';
+            },
         ]);
 
         $this->addColumn([
             'index'      => 'unit_count',
-            'label'      => 'Number of units',
+            'label'      => trans('measurement::app.datagrid.unit_count'),
             'type'       => 'string',
             'searchable' => false,
             'sortable'   => false,
             'filterable' => false,
         ]);
-
 
     }
 
@@ -68,6 +101,7 @@ class MeasurementFamilyDataGrid extends DataGrid
     {
         $this->addAction([
             'icon'   => 'icon-edit',
+            'index'  => 'edit',
             'title'  => 'Edit',
             'method' => 'GET',
             'url'    => function ($row) {
@@ -84,9 +118,8 @@ class MeasurementFamilyDataGrid extends DataGrid
             },
         ]);
     }
-    
 
-    public function prepareMassActions() 
+    public function prepareMassActions()
     {
         $this->addMassAction([
             'title'  => 'Delete Selected',
@@ -95,5 +128,3 @@ class MeasurementFamilyDataGrid extends DataGrid
         ]);
     }
 }
-
-
