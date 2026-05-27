@@ -3,7 +3,7 @@
 namespace Webkul\Admin\Http\Controllers\Settings\DataTransfer;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Response;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +16,8 @@ use Webkul\DataTransfer\Jobs\Export\ExportTrackBatch;
 use Webkul\DataTransfer\Repositories\JobInstancesRepository;
 use Webkul\DataTransfer\Repositories\JobTrackRepository;
 use Webkul\DataTransfer\Rules\SeparatorTypes;
+use Webkul\Core\Repositories\LocaleRepository;
+use Webkul\Core\Repositories\ChannelRepository;
 
 class ExportController extends Controller
 {
@@ -29,13 +31,15 @@ class ExportController extends Controller
     public function __construct(
         protected JobInstancesRepository $jobInstancesRepository,
         protected JobTrackRepository $jobTrackRepository,
-        protected Export $jobHelper
+        protected Export $jobHelper,
+        protected LocaleRepository $localeRepository,
+        protected ChannelRepository $channelRepository
     ) {}
 
     /**
      * Display a listing of the resource.
      *
-     * @return View
+     * @return \Illuminate\View\View
      */
     public function index()
     {
@@ -49,19 +53,21 @@ class ExportController extends Controller
     /**
      * Show the form for creating a new resource.
      *
-     * @return View
+     * @return \Illuminate\View\View
      */
     public function create()
     {
         $exporterConfig = config('exporters');
-
-        return view('admin::settings.data-transfer.exports.create', compact('exporterConfig'));
+        $locales = $this->localeRepository->getActiveLocales();
+        $channels = $this->channelRepository->all();
+    
+        return view('admin::settings.data-transfer.exports.create', compact('exporterConfig','locales', 'channels'));
     }
 
     /**
      * Store a newly created resource in storage.
      *
-     * @return Response
+     * @return \Illuminate\Http\Response
      */
     public function store()
     {
@@ -84,6 +90,26 @@ class ExportController extends Controller
             'field_separator',
             'filters',
         ]);
+
+        if (isset($data['filters'])) {
+            foreach (['channel', 'locale'] as $field) {
+                if (isset($data['filters'][$field])) {
+                    $rawData = $data['filters'][$field];
+
+                    if (is_array($rawData)) {
+                        $combined = implode(',', $rawData);
+                        $values = explode(',', $combined);
+                    } else {
+                        $values = explode(',', $rawData);
+                    }
+
+                    $cleaned = array_filter(array_map('trim', $values));
+
+                    $data['filters'][$field] = array_values($cleaned);
+                }
+            }
+        }
+
 
         Event::dispatch('data_transfer.exports.create.validate.before');
 
@@ -116,26 +142,29 @@ class ExportController extends Controller
     /**
      * Show the form for editing a new resource.
      *
-     * @return View
+     * @return \Illuminate\View\View
      */
     public function edit(int $id)
     {
         $exporterConfig = config('exporters');
 
         $export = $this->jobInstancesRepository->findOrFail($id);
+       
+        $locales  = $this->localeRepository->getActiveLocales();
+        $channels = $this->channelRepository->all();
 
-        return view('admin::settings.data-transfer.exports.edit', compact('export', 'exporterConfig'));
+        return view('admin::settings.data-transfer.exports.edit', compact('export','locales','channels', 'exporterConfig'));
     }
 
     /**
      * Update a resource in storage.
      *
-     * @return Response
+     * @return \Illuminate\Http\Response
      */
+
     public function update(int $id)
     {
         $exporterConfig = config('exporters');
-
         $exporters = array_keys($exporterConfig);
 
         $export = $this->jobInstancesRepository->findOrFail($id);
@@ -146,20 +175,35 @@ class ExportController extends Controller
             'filters'             => 'array',
             'field_separator'     => ['required_if:filters.file_format,Csv', new SeparatorTypes],
         ]);
-
+        
         Event::dispatch('data_transfer.exports.update.before');
 
+        $requestedData = request()->only([
+            'entity_type',
+            'field_separator',
+            'filters',
+        ]);
+
+        if (isset($requestedData['filters'])) {
+            foreach (['channel', 'locale'] as $field) {
+                if (isset($requestedData['filters'][$field])) {
+                    $rawData = $requestedData['filters'][$field];
+
+                    $combined = is_array($rawData) ? implode(',', $rawData) : $rawData;
+                    $values = explode(',', $combined);
+
+                    $cleaned = array_filter(array_map('trim', $values));
+
+                    $requestedData['filters'][$field] = array_values($cleaned);
+                }
+            }
+        }
+        
         $data = array_merge(
-            request()->only([
-                'entity_type',
-                'field_separator',
-                'filters',
-            ]),
+            $requestedData,
             [
                 'action'               => 'fetch',
                 'validation_strategy'  => '',
-                'validation_strategy'  => '',
-                'allowed_errors'       => '',
                 'state'                => 'pending',
                 'processed_rows_count' => 0,
                 'invalid_rows_count'   => 0,
@@ -198,7 +242,7 @@ class ExportController extends Controller
      * Remove the specified resource from storage.
      *
      * @param  int  $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
     public function destroy($id)
     {
@@ -234,7 +278,7 @@ class ExportController extends Controller
     /**
      * Show the form for creating a new resource.
      *
-     * @return View
+     * @return \Illuminate\View\View
      */
     public function exportView(int $id)
     {

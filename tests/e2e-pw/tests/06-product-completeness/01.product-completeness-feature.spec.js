@@ -113,17 +113,26 @@ test.describe('Verify that Product Completeness feature correctly Exists', () =>
     await adminPage.waitForLoadState('networkidle');
     await expect(adminPage.locator('#app').getByText(/\d+ Results?/)).toBeVisible({ timeout: 20000 });
     await expect(adminPage).toHaveURL(/\/admin\/catalog\/families\/edit\/\d+\?completeness/);
+<<<<<<< HEAD
     // Verify we're on the completeness page via the grid header columns
     // (the page title "Completeness" appears in toast notifications too, making
     // a plain `p` selector unreliable)
     await expect(adminPage.locator('#app').getByText('Required in Channels').first()).toBeVisible();
+=======
+    await expect(adminPage.getByRole('paragraph').filter({ hasText: 'Completeness' })).toBeVisible();
+>>>>>>> pr-326
     await expect(adminPage.locator('div').filter({ hasText: /^Code$/ }).first()).toBeVisible();
     await expect(adminPage.locator('div').filter({ hasText: /^Name$/ }).first()).toBeVisible();
     await expect(adminPage.locator('div').filter({ hasText: /^Required in Channels$/ }).first()).toBeVisible();
   });
 
   test('Verify Product Completeness Status Display on Dashboard for All Products Channel-wise', async ({ adminPage }) => {
+<<<<<<< HEAD
     await navigateTo(adminPage, 'dashboard');
+=======
+    await adminPage.getByRole('link', { name: ' Dashboard' }).click();
+    await expect(adminPage.getByRole('link', { name: ' Dashboard' })).toBeVisible();
+>>>>>>> pr-326
     // Completeness widget only appears when required attributes are configured
     const completenessSection = adminPage.locator('header').filter({ hasText: /Default.*completeness/i });
     const hasCompleteness = await completenessSection.isVisible({ timeout: 5000 }).catch(() => false);
@@ -306,14 +315,24 @@ test.describe('Verify that Product Completeness feature correctly Exists', () =>
   // ── Default family: Filter by Required in Channels after assignment ──
 
   test('Verify filter using Required in Channels returns results after channel assignment', async ({ adminPage }) => {
+<<<<<<< HEAD
     await goToFamilyCompletenessTab(adminPage, 'default');
 
     // Assign Default channel to an attribute
+=======
+    await goToFamilyCompletenessTab(adminPage, TEST_FAMILY_CODE);
+
+    // Ensure at least one attribute has Default channel assigned
+>>>>>>> pr-326
     const unassignedSelect = adminPage.locator('.multiselect__tags', { hasText: 'Select option' }).first();
     if (await unassignedSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
       await unassignedSelect.click();
       await adminPage.getByRole('option', { name: 'Default' }).first().click();
+<<<<<<< HEAD
       await expect(adminPage.locator('#app').getByText(/Completeness updated successfully/i)).toBeVisible({ timeout: 20000 });
+=======
+      await expect(adminPage.locator('#app').getByText(/Completeness updated successfully/i)).toBeVisible({ timeout: 10000 });
+>>>>>>> pr-326
       await adminPage.waitForLoadState('networkidle');
     }
 
@@ -343,4 +362,84 @@ test.describe('Verify that Product Completeness feature correctly Exists', () =>
       .locator('#assigned-attribute-groups .ltr\\:ml-11 [data-draggable="true"]').count();
     expect(assignedCount).toBeGreaterThan(0);
   });
+<<<<<<< HEAD
+=======
+
+  // ── Multi-channel tests (require channel3) ──
+
+  test('Create a new channel with multiple locales and currencies', async ({ adminPage }) => {
+    // Enable the fr_FR locale (only if not already enabled)
+    await adminPage.getByRole('link', { name: ' Settings' }).click();
+    await adminPage.getByRole('link', { name: 'Locales' }).click();
+    await adminPage.waitForLoadState('networkidle');
+    await adminPage.getByPlaceholder('Search by code').first().fill('fr_FR');
+    await adminPage.keyboard.press('Enter');
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('#app').getByText('fr_FR').first()).toBeVisible({ timeout: 10000 });
+    const localeRow = adminPage.locator('#app div').filter({ hasText: 'fr_FR' }).first();
+    await localeRow.locator('span[title="Edit"]').first().click();
+    await adminPage.waitForLoadState('load');
+    const statusChecked = await adminPage.locator('input[name="status"][type="checkbox"]').isChecked();
+    if (!statusChecked) {
+      await adminPage.locator('label[for="status"]').first().click();
+    }
+    await adminPage.getByRole('button', { name: 'Save Locale' }).click();
+    await expect(adminPage.locator('#app').getByText(/Locale.*updated successfully/i)).toBeVisible({ timeout: 15000 });
+
+    // Enable the EUR currency
+    await adminPage.getByRole('link', { name: 'Currencies' }).click();
+    await adminPage.waitForLoadState('networkidle');
+    await adminPage.getByPlaceholder('Search by code or id').first().fill('EUR');
+    await adminPage.keyboard.press('Enter');
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('#app').getByText('EUR').first()).toBeVisible({ timeout: 10000 });
+    const currencyRow = adminPage.locator('#app div').filter({ hasText: 'EUR' }).first();
+    await currencyRow.locator('span[title="Edit"]').first().click();
+    await adminPage.waitForLoadState('load');
+    const currencyChecked = await adminPage.locator('input[name="status"][type="checkbox"]').isChecked();
+    if (!currencyChecked) {
+      await adminPage.locator('label[for="status"]').first().click();
+    }
+    await adminPage.getByRole('button', { name: 'Save Currency' }).click();
+    await expect(adminPage.locator('#app').getByText(/Currency updated successfully/i)).toBeVisible();
+
+    // Create channel3 (skip if already exists)
+    await adminPage.getByRole('link', { name: 'Channels' }).click();
+    await adminPage.waitForLoadState('networkidle');
+    const existingChannel = adminPage.locator('#app').getByText('channel3');
+    if (await existingChannel.isVisible({ timeout: 3000 }).catch(() => false)) {
+      return;
+    }
+    await adminPage.getByRole('link', { name: 'Create Channel' }).click();
+    await adminPage.getByRole('textbox', { name: 'Code' }).click();
+    await adminPage.getByRole('textbox', { name: 'Code' }).fill('defaultchannel2');
+    await adminPage.locator('#root_category_id').getByRole('combobox').locator('div').filter({ hasText: 'Select Root Category' }).click();
+    await adminPage.getByText('[root]').click();
+    await adminPage.locator('input[name="en_US[name]"]').click();
+    await adminPage.locator('input[name="en_US[name]"]').fill('channel3');
+    await adminPage.locator('#locales').getByRole('combobox').locator('div').filter({ hasText: 'Select Locales' }).click();
+    await adminPage.locator('#locales').getByText('French (France)').click();
+    await adminPage.getByRole('option', { name: 'English (United States)' }).first().click();
+    await adminPage.locator('body').click();
+    await adminPage.locator('#currencies').getByRole('combobox').locator('div').filter({ hasText: 'Select currencies' }).click();
+    await adminPage.getByText('Euro').click();
+    await adminPage.getByRole('option', { name: 'US Dollar' }).first().click();
+    await adminPage.getByRole('button', { name: 'Save Channel' }).click();
+    await expect(adminPage.locator('#app').getByText(/Channel created successfully/i)).toBeVisible();
+  });
+
+  test.skip('Verify all available channels are displayed in Configure Completeness modal', async ({ adminPage }) => {
+    await goToFamilyCompletenessTab(adminPage, TEST_FAMILY_CODE);
+    await openCompletenessModal(adminPage);
+    await adminPage.locator('.multiselect__tags').last().click();
+    await expect(adminPage.getByRole('option', { name: 'Default' }).first()).toBeVisible();
+    await expect(adminPage.getByRole('option', { name: 'channel3' }).first()).toBeVisible();
+  });
+
+  // ── Cleanup ──
+
+  test('Delete the created test family', async ({ adminPage }) => {
+    await deleteFamilyByCode(adminPage, TEST_FAMILY_CODE);
+  });
+>>>>>>> pr-326
 });

@@ -6,6 +6,7 @@ UnoPim follows Laravel's release cadence. Each minor receives bug
 fixes and security fixes from its release date until the underlying
 Laravel version reaches End of Life.
 
+<<<<<<< HEAD
 | Version | PHP (*)   | Laravel | Release             | Bug Fixes Until      | Security Fixes Until |
 | ------- | --------- | ------- | ------------------- | -------------------- | -------------------- |
 | 2.0     | 8.3 - 8.5 | 12.x    | March 27th, 2026    | August 13th, 2026    | February 24th, 2027  |
@@ -25,6 +26,14 @@ version.
 | 1.0     | 8.2 - 8.3 | 10.x    | November 21st, 2025 | May 26th, 2026       |
 
 ---
+=======
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.2.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| 1.0.x   | :white_check_mark: |
+| 2.0.x   | :white_check_mark: |
+>>>>>>> pr-326
 
 ## Reporting a Vulnerability
 

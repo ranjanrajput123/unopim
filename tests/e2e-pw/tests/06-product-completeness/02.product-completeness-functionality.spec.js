@@ -38,16 +38,30 @@ test.describe('Verify the behaviour of Product Completeness feature', () => {
       await adminPage.goto('/admin/catalog/products', { waitUntil: 'networkidle', timeout: 60000 });
     }
 
+<<<<<<< HEAD
     // Check for the Complete column — it should show either N/A or a score
     await expect(adminPage.locator('p').filter({ hasText: /^Complete$/ })).toBeVisible();
     const hasNA = await adminPage.getByText('N/A').first().isVisible({ timeout: 3000 }).catch(() => false);
     const hasScore = await adminPage.locator('#app').getByText(/%/).first().isVisible({ timeout: 3000 }).catch(() => false);
     expect(hasNA || hasScore).toBeTruthy();
+=======
+    await adminPage.goto('/admin/catalog/products', { waitUntil: 'load' });
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('span[title="Edit"]').first()).toBeVisible({ timeout: 15000 });
+
+    // Search for the specific product to isolate the row
+    await adminPage.getByPlaceholder('Search').first().fill('NAScore');
+    await adminPage.keyboard.press('Enter');
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('span[title="Edit"]').first()).toBeVisible({ timeout: 10000 });
+    await expect(adminPage.getByText('N/A').first()).toBeVisible();
+>>>>>>> pr-326
   });
 
   test('Verify product edit page shows no completeness score when no required channel configured', async ({ adminPage }) => {
     await adminPage.goto('/admin/catalog/products', { waitUntil: 'load' });
     await adminPage.waitForLoadState('networkidle');
+<<<<<<< HEAD
 
     // Check if any products exist
     const editBtn = adminPage.locator('span[title="Edit"]').first();
@@ -68,6 +82,13 @@ test.describe('Verify the behaviour of Product Completeness feature', () => {
 
     // Now on edit page — verify completeness section behavior
     await adminPage.waitForLoadState('networkidle');
+=======
+    await adminPage.getByPlaceholder('Search').first().fill('NAScore');
+    await adminPage.keyboard.press('Enter');
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('span[title="Edit"]').first()).toBeVisible({ timeout: 10000 });
+    await adminPage.locator('span[title="Edit"]').first().click();
+>>>>>>> pr-326
     await expect(adminPage).toHaveURL(/.*\/edit\/.*/);
 
     // Verify the product edit page rendered successfully (has the Save Product button)
@@ -118,6 +139,7 @@ test.describe('Verify the behaviour of Product Completeness feature', () => {
     await adminPage.waitForLoadState('networkidle');
     await expect(adminPage.locator('#app').getByText(/\d+ Results?/)).toBeVisible({ timeout: 20000 });
 
+<<<<<<< HEAD
     // If there's a tag icon (channel assigned), deselect it
     const tagIcon = adminPage.locator('.multiselect__tag-icon').first();
     const hasAssignment = await tagIcon.isVisible({ timeout: 3000 }).catch(() => false);
@@ -134,6 +156,38 @@ test.describe('Verify the behaviour of Product Completeness feature', () => {
       await adminPage.locator('.multiselect__tag-icon').first().click();
       await expect(adminPage.locator('#app').getByText('Completeness updated successfully Close').first()).toBeVisible();
     }
+=======
+  test('Update the product by filling all missing required attributes', async ({ adminPage }) => {
+    await adminPage.goto('/admin/catalog/products', { waitUntil: 'load' });
+    await adminPage.waitForLoadState('networkidle');
+    await adminPage.getByPlaceholder('Search').first().fill('NAScore');
+    await adminPage.keyboard.press('Enter');
+    await adminPage.waitForLoadState('networkidle');
+    await expect(adminPage.locator('span[title="Edit"]').first()).toBeVisible({ timeout: 10000 });
+    await adminPage.locator('span[title="Edit"]').first().click();
+    await adminPage.locator('#product_number').click();
+    await adminPage.locator('#product_number').fill('123');
+    await adminPage.locator('input[name="values[channel_locale_specific][default][en_US][name]"]').fill('skusavedraft');
+    await adminPage.locator('input[name="values[common][url_key]"]').click();
+    await adminPage.locator('input[name="values[common][url_key]"]').type('skusavedraft');
+    const shortDescFrame = adminPage.frameLocator('#short_description_ifr');
+    await shortDescFrame.locator('body').click();
+    await shortDescFrame.locator('body').type('This is a short description', { delay: 100 });
+    const mainDescFrame = adminPage.frameLocator('#description_ifr');
+    await mainDescFrame.locator('body').click();
+    await mainDescFrame.locator('body').type('This is the full product description added by test.');
+    await adminPage.locator('input[name="values[channel_locale_specific][default][en_US][price][USD]"]').fill('300');
+    await adminPage.locator('#meta_title').click();
+    await adminPage.locator('#meta_title').fill('meattitle');
+    await adminPage.locator('#meta_keywords').click();
+    await adminPage.locator('#meta_keywords').fill('keyword');
+    await adminPage.locator('#meta_description').click();
+    await adminPage.locator('#meta_description').fill('description');
+    await adminPage.locator('#cost').click();
+    await adminPage.locator('#cost').fill('23');
+    await adminPage.getByRole('button', { name: 'Save Product' }).click();
+    await expect(adminPage.locator('#app').getByText(/Product.*successfully/i)).toBeVisible({ timeout: 10000 });
+>>>>>>> pr-326
   });
 
   test('Verify configuring required attributes for different channels in Default Family', async ({ adminPage }) => {
